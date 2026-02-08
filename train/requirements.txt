@@ -1,0 +1,20 @@
+# 학습용 추가 패키지
+
+# 공통
+numpy>=1.21.0
+Pillow>=9.0.0
+tqdm>=4.62.0
+matplotlib>=3.5.0
+opencv-python>=4.5.0
+
+# CNN 학습용
+torch>=1.9.0
+torchvision>=0.10.0
+
+# ML 학습용
+scikit-learn>=1.0.0
+scikit-image>=0.19.0
+
+# ML 분류기 (선택)
+# xgboost>=1.5.0
+# lightgbm>=3.3.0
