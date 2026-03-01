@@ -24,6 +24,12 @@ class RegionType(Enum):
     UNKNOWN = "unknown"
 
 
+class ExportFormat(Enum):
+    """출력 형식"""
+    DOCX = "docx"
+    HWP = "hwp"
+
+
 @dataclass
 class OCRConfig:
     """OCR 설정"""
@@ -53,13 +59,16 @@ class OCRConfig:
 class ExportConfig:
     """내보내기 설정"""
     # 출력 형식
-    output_format: str = "docx"
+    output_format: ExportFormat = ExportFormat.DOCX
 
     # 수식을 이미지로 내보내기 (False면 LaTeX 텍스트)
     math_as_image: bool = True
 
     # 원본 레이아웃 유지 시도
     preserve_layout: bool = True
+
+    # 감지된 레이아웃 적용 여부
+    apply_detected_layout: bool = True
 
     # 출력 경로
     output_path: Optional[Path] = None

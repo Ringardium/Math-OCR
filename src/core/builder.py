@@ -22,6 +22,7 @@ class PageContent:
     """페이지 콘텐츠"""
     page_number: int
     blocks: list[ContentBlock] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
 
     def add_block(self, block: ContentBlock) -> None:
         self.blocks.append(block)
@@ -56,6 +57,16 @@ class DocumentBuilder:
         """페이지 콘텐츠 생성"""
         page_content = PageContent(page_number=page.page_number)
 
+        # 레이아웃 정보 전달
+        if "layout" in page.metadata:
+            layout = page.metadata["layout"]
+            page_content.metadata = {
+                "margins": layout.margins,
+                "columns": layout.columns,
+                "column_gap": layout.column_gap,
+                "line_spacing": layout.line_spacing,
+            }
+
         for region in page.regions:
             block = self._region_to_block(region)
             if block:
@@ -65,6 +76,14 @@ class DocumentBuilder:
 
     def _region_to_block(self, region: Region) -> ContentBlock | None:
         """Region을 ContentBlock으로 변환"""
+        # 레이아웃 관련 공통 메타데이터
+        layout_meta = {
+            "column": region.metadata.get("column", 0),
+            "problem_number": region.metadata.get("problem_number"),
+            "is_choice_group": region.metadata.get("is_choice_group", False),
+            "indent_level": region.metadata.get("indent_level", 0),
+        }
+
         if region.region_type == RegionType.TEXT:
             return ContentBlock(
                 block_type="text",
@@ -72,7 +91,8 @@ class DocumentBuilder:
                 metadata={
                     "is_handwritten": region.is_handwritten,
                     "confidence": region.confidence,
-                    "bbox": region.bbox.to_tuple()
+                    "bbox": region.bbox.to_tuple(),
+                    **layout_meta,
                 }
             )
 
@@ -83,7 +103,8 @@ class DocumentBuilder:
                 metadata={
                     "latex": region.metadata.get("latex"),
                     "confidence": region.confidence,
-                    "bbox": region.bbox.to_tuple()
+                    "bbox": region.bbox.to_tuple(),
+                    **layout_meta,
                 }
             )
 
@@ -92,7 +113,8 @@ class DocumentBuilder:
                 block_type="image",
                 content=region.image,
                 metadata={
-                    "bbox": region.bbox.to_tuple()
+                    "bbox": region.bbox.to_tuple(),
+                    **layout_meta,
                 }
             )
 
@@ -102,7 +124,8 @@ class DocumentBuilder:
                 content=region.metadata.get("table_data", region.content),
                 metadata={
                     "confidence": region.confidence,
-                    "bbox": region.bbox.to_tuple()
+                    "bbox": region.bbox.to_tuple(),
+                    **layout_meta,
                 }
             )
 

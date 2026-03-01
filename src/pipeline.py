@@ -8,10 +8,11 @@ from dataclasses import dataclass, field
 
 from tqdm import tqdm
 
-from .config import AppConfig, OCRConfig, ExportConfig, TextType, RegionType
+from .config import AppConfig, OCRConfig, ExportConfig, ExportFormat, TextType, RegionType
 from .core.document import Document, Page, Region
 from .core.loader import AutoLoader
 from .core.detector import RegionDetector
+from .core.layout_analyzer import LayoutAnalyzer
 from .core.builder import DocumentBuilder, DocumentContent
 from .ocr.base import BaseOCR
 from .ocr.text_ocr import TextOCR
@@ -71,6 +72,7 @@ class OCRPipeline:
         # 컴포넌트들
         self._loader = AutoLoader(dpi=200)
         self._detector = RegionDetector()
+        self._layout_analyzer = LayoutAnalyzer()
         self._builder = DocumentBuilder()
 
     @property
@@ -103,7 +105,11 @@ class OCRPipeline:
     @property
     def exporter(self) -> BaseExporter:
         if self._exporter is None:
-            self._exporter = DocxExporter()
+            if self.config.export.output_format == ExportFormat.HWP:
+                from .exporters.hwp_exporter import HwpExporter
+                self._exporter = HwpExporter()
+            else:
+                self._exporter = DocxExporter()
         return self._exporter
 
     def _report_progress(self, message: str, progress: float) -> None:
@@ -154,10 +160,15 @@ class OCRPipeline:
             self._classify_and_filter(document)
 
             # 4. OCR 수행
-            self._report_progress("OCR 처리 중...", 0.5)
+            self._report_progress("OCR 처리 중...", 0.4)
             self._perform_ocr(document, stats)
 
-            # 5. 문서 콘텐츠 생성
+            # 5. 레이아웃 분석
+            if self.config.export.apply_detected_layout:
+                self._report_progress("레이아웃 분석 중...", 0.7)
+                self._analyze_layout(document)
+
+            # 6. 문서 콘텐츠 생성
             self._report_progress("문서 생성 중...", 0.8)
             content = self._builder.build(document)
 
@@ -250,6 +261,21 @@ class OCRPipeline:
 
                 except Exception as e:
                     region.metadata["ocr_error"] = str(e)
+
+    def _analyze_layout(self, document: Document) -> None:
+        """페이지별 레이아웃 분석"""
+        for page in document.pages:
+            layout = self._layout_analyzer.analyze(page)
+            page.metadata["layout"] = layout
+
+            # 레이아웃 정보를 각 영역 메타데이터에 전파
+            for i, region in enumerate(page.regions):
+                if i < len(layout.content_regions):
+                    lr = layout.content_regions[i]
+                    region.metadata["column"] = lr.column
+                    region.metadata["problem_number"] = lr.problem_number
+                    region.metadata["is_choice_group"] = lr.is_choice_group
+                    region.metadata["indent_level"] = lr.indent_level
 
 
 class SimplePipeline:

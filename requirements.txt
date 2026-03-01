@@ -9,13 +9,20 @@ pdf2image>=1.16.0
 
 # OCR engines
 easyocr>=1.6.0
-pix2tex>=0.1.0
+texify>=0.2.0
 
 # Table extraction
 img2table>=1.0.0
 
 # Document export
 python-docx>=0.8.11
+pyhwpx>=0.5.0
+
+# LaTeX to MathML (for DOCX equation support)
+latex2mathml>=3.0.0
+
+# GUI
+PyQt6>=6.5.0
 
 # Machine learning (for handwriting classification)
 torch>=1.9.0

@@ -1,0 +1,147 @@
+/* YM-OCR 스타일시트 */
+
+QMainWindow {
+    background-color: #f5f5f5;
+}
+
+/* 툴바 */
+QToolBar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 4px;
+    spacing: 8px;
+}
+
+QToolBar QToolButton {
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+QToolBar QToolButton:hover {
+    background-color: #e8f0fe;
+}
+
+/* 썸네일 패널 */
+#ThumbnailPanel {
+    background-color: #ffffff;
+    border-right: 1px solid #e0e0e0;
+}
+
+#ThumbnailPanel QListWidget {
+    background-color: #ffffff;
+    border: none;
+    outline: none;
+}
+
+#ThumbnailPanel QListWidget::item {
+    padding: 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+#ThumbnailPanel QListWidget::item:selected {
+    background-color: #e8f0fe;
+    border-left: 3px solid #1a73e8;
+}
+
+/* 미리보기 패널 */
+#PreviewPanel {
+    background-color: #e8e8e8;
+    border: none;
+}
+
+/* 결과 패널 */
+#ResultPanel {
+    background-color: #ffffff;
+    border-left: 1px solid #e0e0e0;
+}
+
+#ResultPanel QTextEdit {
+    background-color: #ffffff;
+    border: none;
+    font-family: "맑은 고딕", "Malgun Gothic", sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 16px;
+}
+
+/* 진행 표시줄 */
+#ProgressWidget {
+    background-color: #ffffff;
+    border-top: 1px solid #e0e0e0;
+    padding: 8px 16px;
+}
+
+QProgressBar {
+    border: none;
+    background-color: #e0e0e0;
+    border-radius: 4px;
+    height: 8px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background-color: #1a73e8;
+    border-radius: 4px;
+}
+
+/* 설정 패널 */
+#SettingsPanel {
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+#SettingsPanel QLabel {
+    font-weight: bold;
+    color: #333333;
+}
+
+#SettingsPanel QCheckBox {
+    spacing: 8px;
+    font-size: 13px;
+}
+
+#SettingsPanel QComboBox {
+    padding: 4px 8px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background-color: #ffffff;
+}
+
+/* 버튼 */
+QPushButton {
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    border: 1px solid #e0e0e0;
+    background-color: #ffffff;
+}
+
+QPushButton:hover {
+    background-color: #f5f5f5;
+}
+
+QPushButton#primaryButton {
+    background-color: #1a73e8;
+    color: white;
+    border: none;
+    font-weight: bold;
+}
+
+QPushButton#primaryButton:hover {
+    background-color: #1557b0;
+}
+
+QPushButton#primaryButton:disabled {
+    background-color: #a0c4ff;
+}
+
+/* 상태 바 */
+QStatusBar {
+    background-color: #ffffff;
+    border-top: 1px solid #e0e0e0;
+    font-size: 12px;
+    color: #666666;
+}

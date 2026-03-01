@@ -2,10 +2,12 @@
 YM-OCR: 수학 문서 OCR 변환 프로그램
 
 사용법:
-    python main.py input.pdf                     # 기본 변환
-    python main.py input.pdf -o output.docx      # 출력 파일 지정
-    python main.py input.pdf --text-type printed # 인쇄체만
-    python main.py input.pdf --text-type handwritten  # 손글씨만
+    python main.py                                # GUI 실행
+    python main.py --gui                          # GUI 실행
+    python main.py input.pdf                      # CLI 변환
+    python main.py input.pdf -o output.docx       # 출력 파일 지정
+    python main.py input.pdf --format hwp         # HWP 출력
+    python main.py input.pdf --text-type printed  # 인쇄체만
 """
 
 import argparse
@@ -19,8 +21,10 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 예시:
-    python main.py document.pdf
-    python main.py document.pdf -o result.docx
+    python main.py                              # GUI 실행
+    python main.py document.pdf                 # CLI 변환
+    python main.py document.pdf -o result.docx  # 출력 파일 지정
+    python main.py document.pdf --format hwp    # HWP 변환
     python main.py document.png --text-type printed
     python main.py document.pdf --no-math --no-table
         """
@@ -29,7 +33,15 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "input",
         type=str,
-        help="입력 파일 경로 (PDF 또는 이미지)"
+        nargs="?",
+        default=None,
+        help="입력 파일 경로 (PDF 또는 이미지). 생략 시 GUI 실행"
+    )
+
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="GUI 모드로 실행"
     )
 
     parser.add_argument(
@@ -37,6 +49,14 @@ def create_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="출력 파일 경로 (기본: 입력파일명.docx)"
+    )
+
+    parser.add_argument(
+        "--format",
+        type=str,
+        choices=["docx", "hwp"],
+        default="docx",
+        help="출력 형식 (기본: docx)"
     )
 
     parser.add_argument(
@@ -82,46 +102,68 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main():
-    parser = create_parser()
-    args = parser.parse_args()
+def run_gui():
+    """GUI 모드 실행"""
+    try:
+        from PyQt6.QtWidgets import QApplication
+        from src.gui.main_window import MainWindow
 
-    # 입력 파일 확인
+        app = QApplication(sys.argv)
+        app.setApplicationName("YM-OCR")
+        app.setOrganizationName("YM-OCR")
+
+        window = MainWindow()
+        window.show()
+
+        sys.exit(app.exec())
+
+    except ImportError as e:
+        print(f"GUI 실행에 필요한 패키지가 없습니다.")
+        print(f"설치: pip install PyQt6")
+        print(f"\n상세 오류: {e}")
+        sys.exit(1)
+
+
+def run_cli(args):
+    """CLI 모드 실행"""
     input_path = Path(args.input)
     if not input_path.exists():
         print(f"오류: 파일을 찾을 수 없습니다: {input_path}")
         sys.exit(1)
 
-    print(f"YM-OCR v0.1.0")
+    print(f"YM-OCR v0.2.0")
     print(f"=" * 50)
     print(f"입력 파일: {input_path}")
+    print(f"출력 형식: {args.format.upper()}")
     print(f"텍스트 유형: {args.text_type}")
     print(f"언어: {', '.join(args.languages)}")
-    print(f"수식 OCR: {'비활성화' if args.no_math else '활성화'}")
+    print(f"수식 OCR: {'비활성화' if args.no_math else '활성화 (Texify)'}")
     print(f"표 OCR: {'비활성화' if args.no_table else '활성화'}")
     print(f"GPU: {'비활성화' if args.no_gpu else '활성화'}")
     print(f"=" * 50)
 
     try:
-        from src.pipeline import SimplePipeline
+        from src.pipeline import OCRPipeline
+        from src.config import AppConfig, OCRConfig, ExportConfig, ExportFormat, TextType
 
         def progress_callback(message: str, progress: float):
             bar_length = 30
             filled = int(bar_length * progress)
-            bar = "█" * filled + "░" * (bar_length - filled)
+            bar = "\u2588" * filled + "\u2591" * (bar_length - filled)
             print(f"\r[{bar}] {progress*100:.0f}% - {message}", end="", flush=True)
             if progress >= 1.0:
                 print()
-
-        # 파이프라인 실행
-        from src.pipeline import OCRPipeline
-        from src.config import AppConfig, OCRConfig, TextType
 
         text_type_enum = {
             "both": TextType.BOTH,
             "printed": TextType.PRINTED,
             "handwritten": TextType.HANDWRITTEN
         }[args.text_type]
+
+        export_format = {
+            "docx": ExportFormat.DOCX,
+            "hwp": ExportFormat.HWP,
+        }[args.format]
 
         config = AppConfig(
             ocr=OCRConfig(
@@ -130,6 +172,9 @@ def main():
                 enable_math_ocr=not args.no_math,
                 enable_table_ocr=not args.no_table,
                 use_gpu=not args.no_gpu
+            ),
+            export=ExportConfig(
+                output_format=export_format,
             ),
             debug=args.debug
         )
@@ -166,6 +211,17 @@ def main():
             import traceback
             traceback.print_exc()
         sys.exit(1)
+
+
+def main():
+    parser = create_parser()
+    args = parser.parse_args()
+
+    # GUI 모드: --gui 플래그 또는 입력 파일 없을 때
+    if args.gui or args.input is None:
+        run_gui()
+    else:
+        run_cli(args)
 
 
 if __name__ == "__main__":

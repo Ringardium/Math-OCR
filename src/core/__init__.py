@@ -6,6 +6,8 @@ from .document import Document, Page, Region, BoundingBox
 from .loader import DocumentLoader, PDFLoader, ImageLoader
 from .detector import RegionDetector
 from .builder import DocumentBuilder
+from .layout import PageLayout, Margins, LayoutRegion
+from .layout_analyzer import LayoutAnalyzer
 
 __all__ = [
     "Document",
@@ -17,4 +19,8 @@ __all__ = [
     "ImageLoader",
     "RegionDetector",
     "DocumentBuilder",
+    "PageLayout",
+    "Margins",
+    "LayoutRegion",
+    "LayoutAnalyzer",
 ]

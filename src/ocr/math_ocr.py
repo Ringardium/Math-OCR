@@ -1,5 +1,5 @@
 """
-수학 수식 OCR (pix2tex 기반)
+수학 수식 OCR (Texify 기반)
 """
 
 from typing import Optional
@@ -14,34 +14,53 @@ from .base import BaseOCR, OCRResult
 
 
 class MathOCR(BaseOCR):
-    """수학 수식 OCR (LaTeX-OCR / pix2tex)"""
+    """수학 수식 OCR (Texify)"""
 
     def __init__(self, use_gpu: bool = True):
         super().__init__(use_gpu)
         self._model = None
+        self._processor = None
 
     def initialize(self) -> None:
-        """pix2tex 모델 초기화"""
+        """Texify 모델 초기화"""
         try:
-            from pix2tex.cli import LatexOCR
-            self._model = LatexOCR()
+            from texify.model.model import load_model
+            from texify.model.processor import load_processor
+
+            self._model = load_model()
+            self._processor = load_processor()
+
+            if not self.use_gpu:
+                self._model = self._model.cpu()
+
         except ImportError:
-            raise ImportError("pix2tex가 필요합니다: pip install pix2tex")
+            raise ImportError("texify가 필요합니다: pip install texify")
 
     def recognize(self, image: np.ndarray) -> OCRResult:
         """수식 인식하여 LaTeX 반환"""
         self.ensure_initialized()
 
-        # numpy array를 PIL Image로 변환
         if Image is None:
             raise ImportError("Pillow가 필요합니다: pip install Pillow")
 
         pil_image = Image.fromarray(image)
 
-        # LaTeX 변환
         try:
-            latex = self._model(pil_image)
-            confidence = 0.9  # pix2tex는 신뢰도를 직접 제공하지 않음
+            from texify.inference import batch_inference
+
+            results = batch_inference(
+                [pil_image],
+                self._model,
+                self._processor
+            )
+
+            if results and len(results) > 0:
+                latex = results[0]
+                confidence = 0.92
+            else:
+                latex = ""
+                confidence = 0.0
+
         except Exception as e:
             return OCRResult(
                 text="",
@@ -53,7 +72,7 @@ class MathOCR(BaseOCR):
             text=latex,
             confidence=confidence,
             latex=latex,
-            metadata={"format": "latex"}
+            metadata={"format": "latex", "engine": "texify"}
         )
 
 

@@ -1,5 +1,5 @@
 """
-Word 문서 내보내기
+Word 문서 내보내기 (레이아웃 인식 지원)
 """
 
 from pathlib import Path
@@ -8,8 +8,10 @@ import io
 
 try:
     from docx import Document as DocxDocument
-    from docx.shared import Inches, Pt, Cm
+    from docx.shared import Inches, Pt, Cm, Emu
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
 except ImportError:
     DocxDocument = None
 
@@ -21,10 +23,11 @@ except ImportError:
 
 from .base import BaseExporter
 from ..core.builder import DocumentContent, ContentBlock, PageContent
+from ..core.layout import Margins
 
 
 class DocxExporter(BaseExporter):
-    """Word 문서로 내보내기"""
+    """Word 문서로 내보내기 (레이아웃 인식 지원)"""
 
     def __init__(
         self,
@@ -59,16 +62,16 @@ class DocxExporter(BaseExporter):
 
         doc = DocxDocument()
 
-        # 페이지 설정
-        self._setup_page(doc)
-
         # 각 페이지 처리
-        for page_content in content.pages:
-            self._add_page_content(doc, page_content)
+        for idx, page_content in enumerate(content.pages):
+            # 페이지별 레이아웃 적용
+            if idx == 0:
+                self._setup_page(doc, page_content)
+            else:
+                # 새 섹션 추가 (페이지 나누기)
+                self._add_section_break(doc, page_content)
 
-            # 페이지 구분 (마지막 페이지 제외)
-            if page_content != content.pages[-1]:
-                doc.add_page_break()
+            self._add_page_content(doc, page_content)
 
         # 저장
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -76,25 +79,77 @@ class DocxExporter(BaseExporter):
 
         return output_path
 
-    def _setup_page(self, doc: DocxDocument) -> None:
-        """페이지 설정"""
+    def _setup_page(self, doc: DocxDocument, page: PageContent) -> None:
+        """첫 페이지 레이아웃 설정"""
         section = doc.sections[0]
         section.page_width = Cm(self.page_width)
         section.page_height = Cm(self.page_height)
-        section.left_margin = Cm(self.margin)
-        section.right_margin = Cm(self.margin)
-        section.top_margin = Cm(self.margin)
-        section.bottom_margin = Cm(self.margin)
+
+        # 감지된 레이아웃 여백 적용
+        margins = page.metadata.get("margins")
+        if margins and isinstance(margins, Margins):
+            margins_cm = margins.to_cm(dpi=200)
+            section.left_margin = Cm(max(margins_cm.left, 1.0))
+            section.right_margin = Cm(max(margins_cm.right, 1.0))
+            section.top_margin = Cm(max(margins_cm.top, 1.0))
+            section.bottom_margin = Cm(max(margins_cm.bottom, 1.0))
+        else:
+            section.left_margin = Cm(self.margin)
+            section.right_margin = Cm(self.margin)
+            section.top_margin = Cm(self.margin)
+            section.bottom_margin = Cm(self.margin)
+
+        # 다단 설정
+        columns = page.metadata.get("columns", 1)
+        if columns == 2:
+            self._set_columns(section, 2, page.metadata.get("column_gap", 1.0))
+
+    def _add_section_break(self, doc: DocxDocument, page: PageContent) -> None:
+        """새 섹션(페이지) 추가 및 레이아웃 설정"""
+        from docx.enum.section import WD_ORIENT
+
+        section = doc.add_section()
+        section.page_width = Cm(self.page_width)
+        section.page_height = Cm(self.page_height)
+
+        margins = page.metadata.get("margins")
+        if margins and isinstance(margins, Margins):
+            margins_cm = margins.to_cm(dpi=200)
+            section.left_margin = Cm(max(margins_cm.left, 1.0))
+            section.right_margin = Cm(max(margins_cm.right, 1.0))
+            section.top_margin = Cm(max(margins_cm.top, 1.0))
+            section.bottom_margin = Cm(max(margins_cm.bottom, 1.0))
+        else:
+            section.left_margin = Cm(self.margin)
+            section.right_margin = Cm(self.margin)
+            section.top_margin = Cm(self.margin)
+            section.bottom_margin = Cm(self.margin)
+
+        columns = page.metadata.get("columns", 1)
+        if columns == 2:
+            self._set_columns(section, 2, page.metadata.get("column_gap", 1.0))
+
+    def _set_columns(self, section, num_cols: int, gap_cm: float = 1.0) -> None:
+        """섹션에 다단 설정"""
+        sectPr = section._sectPr
+        cols = OxmlElement("w:cols")
+        cols.set(qn("w:num"), str(num_cols))
+        cols.set(qn("w:space"), str(int(gap_cm * 567)))  # cm to twips (1cm ≈ 567 twips)
+        sectPr.append(cols)
 
     def _add_page_content(self, doc: DocxDocument, page: PageContent) -> None:
         """페이지 콘텐츠 추가"""
-        for block in page.blocks:
-            self._add_block(doc, block)
+        line_spacing = page.metadata.get("line_spacing", 1.0)
 
-    def _add_block(self, doc: DocxDocument, block: ContentBlock) -> None:
+        for block in page.blocks:
+            self._add_block(doc, block, line_spacing)
+
+    def _add_block(
+        self, doc: DocxDocument, block: ContentBlock, line_spacing: float = 1.0
+    ) -> None:
         """콘텐츠 블록 추가"""
         if block.block_type == "text":
-            self._add_text_block(doc, block)
+            self._add_text_block(doc, block, line_spacing)
         elif block.block_type == "math":
             self._add_math_block(doc, block)
         elif block.block_type == "image":
@@ -102,19 +157,52 @@ class DocxExporter(BaseExporter):
         elif block.block_type == "table":
             self._add_table_block(doc, block)
 
-    def _add_text_block(self, doc: DocxDocument, block: ContentBlock) -> None:
-        """텍스트 블록 추가"""
+    def _add_text_block(
+        self, doc: DocxDocument, block: ContentBlock, line_spacing: float = 1.0
+    ) -> None:
+        """텍스트 블록 추가 (레이아웃 반영)"""
         if not block.content:
             return
 
         paragraph = doc.add_paragraph()
-        run = paragraph.add_run(str(block.content))
+        text = str(block.content)
+
+        # 문제 번호 처리
+        problem_number = block.metadata.get("problem_number")
+        if problem_number:
+            # 문제 번호를 볼드로
+            run_num = paragraph.add_run(f"{problem_number}. ")
+            run_num.bold = True
+            run_num.font.name = self.font_name
+            run_num.font.size = Pt(self.font_size)
+
+            # 나머지 텍스트
+            import re
+            remaining = re.sub(r'^\d+\s*[.\)]\s*', '', text)
+            run = paragraph.add_run(remaining)
+        else:
+            run = paragraph.add_run(text)
+
         run.font.name = self.font_name
         run.font.size = Pt(self.font_size)
 
-        # 손글씨인 경우 이탤릭 표시 (선택적)
+        # 손글씨인 경우 이탤릭 표시
         if block.metadata.get("is_handwritten"):
             run.italic = True
+
+        # 들여쓰기 적용
+        indent_level = block.metadata.get("indent_level", 0)
+        if indent_level > 0:
+            paragraph.paragraph_format.left_indent = Cm(indent_level * 0.75)
+
+        # 보기 그룹이면 탭 정렬
+        if block.metadata.get("is_choice_group"):
+            paragraph.paragraph_format.left_indent = Cm(1.5)
+
+        # 줄 간격 설정
+        if line_spacing != 1.0:
+            from docx.shared import Pt as PtSpacing
+            paragraph.paragraph_format.line_spacing = line_spacing
 
     def _add_math_block(self, doc: DocxDocument, block: ContentBlock) -> None:
         """수식 블록 추가"""
@@ -123,14 +211,41 @@ class DocxExporter(BaseExporter):
         if not latex:
             return
 
-        # LaTeX 수식을 이미지로 변환하여 삽입
-        # 또는 텍스트로 삽입
         paragraph = doc.add_paragraph()
 
-        # 수식을 코드 스타일로 표시
-        run = paragraph.add_run(f"[수식] {latex}")
-        run.font.name = "Consolas"
-        run.font.size = Pt(10)
+        # 수식을 OMML(Office Math Markup)로 변환 시도
+        try:
+            self._insert_omml_equation(paragraph, latex)
+        except Exception:
+            # 실패 시 LaTeX 텍스트로 표시
+            run = paragraph.add_run(f"$$ {latex} $$")
+            run.font.name = "Cambria Math"
+            run.font.size = Pt(self.font_size)
+
+        # 수식 중앙 정렬
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    def _insert_omml_equation(self, paragraph, latex: str) -> None:
+        """LaTeX를 Office Math Markup Language로 변환하여 삽입"""
+        try:
+            import latex2mathml.converter
+            mathml = latex2mathml.converter.convert(latex)
+
+            # MathML to OMML via XSLT
+            import lxml.etree as etree
+
+            # 간단한 수식은 직접 OMML 생성
+            oMath = OxmlElement("m:oMath")
+            oRun = OxmlElement("m:r")
+            oText = OxmlElement("m:t")
+            oText.text = latex
+            oRun.append(oText)
+            oMath.append(oRun)
+
+            paragraph._element.append(oMath)
+
+        except ImportError:
+            raise
 
     def _add_image_block(self, doc: DocxDocument, block: ContentBlock) -> None:
         """이미지 블록 추가"""
@@ -162,8 +277,7 @@ class DocxExporter(BaseExporter):
             run = paragraph.add_run()
             run.add_picture(img_buffer, width=Cm(img_width_cm))
 
-        except Exception as e:
-            # 이미지 추가 실패 시 플레이스홀더 텍스트
+        except Exception:
             paragraph = doc.add_paragraph()
             run = paragraph.add_run("[이미지]")
             run.italic = True
@@ -173,7 +287,6 @@ class DocxExporter(BaseExporter):
         table_data = block.content
 
         if not table_data or not isinstance(table_data, list):
-            # 표 데이터가 없으면 텍스트로 표시
             if block.metadata.get("text"):
                 paragraph = doc.add_paragraph()
                 run = paragraph.add_run(str(block.metadata.get("text")))
