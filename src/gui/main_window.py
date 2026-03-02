@@ -171,7 +171,14 @@ class MainWindow(QMainWindow):
 
     def _load_stylesheet(self):
         """스타일시트 로드"""
-        style_path = Path(__file__).parent / "styles.qss"
+        import sys
+        # PyInstaller 환경 대응
+        if getattr(sys, 'frozen', False):
+            base = Path(sys._MEIPASS)
+        else:
+            base = Path(__file__).parent
+
+        style_path = base / "src" / "gui" / "styles.qss" if getattr(sys, 'frozen', False) else base / "styles.qss"
         if style_path.exists():
             with open(style_path, "r", encoding="utf-8") as f:
                 self.setStyleSheet(f.read())

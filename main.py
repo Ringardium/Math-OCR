@@ -11,8 +11,21 @@ YM-OCR: 수학 문서 OCR 변환 프로그램
 """
 
 import argparse
+import os
 import sys
+import traceback
 from pathlib import Path
+
+
+def setup_frozen_env():
+    """PyInstaller로 빌드된 환경에서 경로 설정"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller exe 실행 시
+        base_dir = Path(sys._MEIPASS)
+        os.chdir(base_dir)
+        # src 모듈을 찾을 수 있도록 경로 추가
+        if str(base_dir) not in sys.path:
+            sys.path.insert(0, str(base_dir))
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -104,8 +117,11 @@ def create_parser() -> argparse.ArgumentParser:
 
 def run_gui():
     """GUI 모드 실행"""
+    print("[DEBUG] run_gui() called", flush=True)
     try:
-        from PyQt6.QtWidgets import QApplication
+        print("[DEBUG] importing PyQt6...", flush=True)
+        from PyQt6.QtWidgets import QApplication, QMessageBox
+        print("[DEBUG] importing MainWindow...", flush=True)
         from src.gui.main_window import MainWindow
 
         app = QApplication(sys.argv)
@@ -118,10 +134,39 @@ def run_gui():
         sys.exit(app.exec())
 
     except ImportError as e:
-        print(f"GUI 실행에 필요한 패키지가 없습니다.")
-        print(f"설치: pip install PyQt6")
-        print(f"\n상세 오류: {e}")
+        msg = f"GUI 실행에 필요한 패키지가 없습니다.\n설치: pip install PyQt6\n\n상세 오류: {e}"
+        print(msg)
+        _show_error_fallback(msg)
         sys.exit(1)
+
+    except Exception as e:
+        msg = f"GUI 실행 중 오류 발생:\n\n{traceback.format_exc()}"
+        print(msg)
+        _show_error_fallback(msg)
+        sys.exit(1)
+
+
+def _show_error_fallback(message: str):
+    """에러 발생 시 메시지 박스 또는 로그 파일로 표시"""
+    # 로그 파일에 기록
+    try:
+        log_path = Path(sys.executable).parent / "ym-ocr-error.log"
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(message)
+        print(f"에러 로그 저장: {log_path}")
+    except Exception:
+        pass
+
+    # tkinter 메시지 박스 시도 (PyQt6 없을 때 폴백)
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror("YM-OCR 오류", message)
+        root.destroy()
+    except Exception:
+        pass
 
 
 def run_cli(args):
@@ -225,4 +270,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    print("[DEBUG] YM-OCR starting...", flush=True)
+    setup_frozen_env()
+    print("[DEBUG] Environment setup done, launching main()...", flush=True)
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        print(f"[FATAL] {e}", flush=True)
+        traceback.print_exc()
+        input("Press Enter to exit...")
